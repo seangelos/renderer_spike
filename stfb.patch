@@ -1,0 +1,80 @@
+diff --git a/VERSION b/VERSION
+index 1502b06c..67107bee 100644
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-#define SPIKE_VERSION "1.1.0"
++#define SPIKE_VERSION "1.1.0-custom_stfb3"
+diff --git a/riscv/encoding.h b/riscv/encoding.h
+index c459498a..a312b942 100644
+--- a/riscv/encoding.h
++++ b/riscv/encoding.h
+@@ -2793,6 +2793,9 @@
+ #define MASK_VFWREDSUM_VS  0xfc00707f
+ #define MATCH_VPOPC_M 0x40082057
+ #define MASK_VPOPC_M  0xfc0ff07f
++// Match/mask for custom stfb command.
++#define MATCH_STFB 0xB
++#define MASK_STFB 0xfe007fff
+ #define CSR_FFLAGS 0x1
+ #define CSR_FRM 0x2
+ #define CSR_FCSR 0x3
+@@ -3061,6 +3064,8 @@
+ #define CSR_MHPMCOUNTER29H 0xb9d
+ #define CSR_MHPMCOUNTER30H 0xb9e
+ #define CSR_MHPMCOUNTER31H 0xb9f
++// Custom CSR for stfb framebuffer address.
++#define CSR_FBADDR 0x800
+ #define CAUSE_MISALIGNED_FETCH 0x0
+ #define CAUSE_FETCH_ACCESS 0x1
+ #define CAUSE_ILLEGAL_INSTRUCTION 0x2
+@@ -4338,6 +4343,7 @@ DECLARE_INSN(vse1_v, MATCH_VSE1_V, MASK_VSE1_V)
+ DECLARE_INSN(vfredsum_vs, MATCH_VFREDSUM_VS, MASK_VFREDSUM_VS)
+ DECLARE_INSN(vfwredsum_vs, MATCH_VFWREDSUM_VS, MASK_VFWREDSUM_VS)
+ DECLARE_INSN(vpopc_m, MATCH_VPOPC_M, MASK_VPOPC_M)
++DECLARE_INSN(stfb, MATCH_STFB, MASK_STFB)
+ #endif
+ #ifdef DECLARE_CSR
+ DECLARE_CSR(fflags, CSR_FFLAGS)
+@@ -4608,6 +4614,7 @@ DECLARE_CSR(mhpmcounter28h, CSR_MHPMCOUNTER28H)
+ DECLARE_CSR(mhpmcounter29h, CSR_MHPMCOUNTER29H)
+ DECLARE_CSR(mhpmcounter30h, CSR_MHPMCOUNTER30H)
+ DECLARE_CSR(mhpmcounter31h, CSR_MHPMCOUNTER31H)
++DECLARE_CSR(fbaddr, CSR_FBADDR)
+ #endif
+ #ifdef DECLARE_CAUSE
+ DECLARE_CAUSE("misaligned fetch", CAUSE_MISALIGNED_FETCH)
+diff --git a/riscv/insns/stfb.h b/riscv/insns/stfb.h
+new file mode 100644
+index 00000000..5daaecc0
+--- /dev/null
++++ b/riscv/insns/stfb.h
+@@ -0,0 +1,2 @@
++reg_t fb = p->get_csr(CSR_FBADDR, insn, true);
++MMU.store_uint32(4 * RS1 + fb, RS2);
+diff --git a/riscv/processor.cc b/riscv/processor.cc
+index e7e60bf6..00220cba 100644
+--- a/riscv/processor.cc
++++ b/riscv/processor.cc
+@@ -547,6 +547,9 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
+   csrmap[CSR_MVENDORID] = std::make_shared<const_csr_t>(proc, CSR_MVENDORID, 0);
+   csrmap[CSR_MHARTID] = std::make_shared<const_csr_t>(proc, CSR_MHARTID, proc->get_id());
+ 
++  // Initialize custom fbaddr register.
++  csrmap[CSR_FBADDR] = std::make_shared<basic_csr_t>(proc, CSR_FBADDR, 0);
++
+   serialized = false;
+ 
+ #ifdef RISCV_ENABLE_COMMITLOG
+diff --git a/riscv/riscv.mk.in b/riscv/riscv.mk.in
+index 2347ce68..422f0761 100644
+--- a/riscv/riscv.mk.in
++++ b/riscv/riscv.mk.in
+@@ -118,6 +118,7 @@ riscv_insn_ext_i = \
+ 	xori \
+ 	fence \
+ 	fence_i \
++	stfb \
+ 
+ riscv_insn_ext_a = \
+ 	amoadd_d \
